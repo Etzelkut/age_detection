@@ -4,3 +4,4 @@ pip install pytorch-lightning
 pip install comet-ml
 pip install local-attention
 pip install einops
+pip install torchvision
