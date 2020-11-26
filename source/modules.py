@@ -148,15 +148,6 @@ def make_encoder(hparams):
     return model
 
 
-class Embeddings(nn.Module):
-    def __init__(self, d_model, vocab):
-        super(Embeddings, self).__init__()
-        self.lut = nn.Embedding(vocab, d_model)
-        self.d_model = d_model
-
-    def forward(self, x):
-        return self.lut(x) * math.sqrt(self.d_model)
-
 
 class Model_dl(nn.Module):
     def __init__(self, hparams):
@@ -167,12 +158,14 @@ class Model_dl(nn.Module):
         else:
             channels = 3
         
-        self.n_patch = np.square(int(hparams.im_size/hparams.patch_size))
-        self.one_patch_dim = int(channels * np.square(hparams.patch_size))
+        n_patch = (int(hparams.im_size/hparams.patch_size))**2
+        self.one_patch_dim = int(channels * (hparams.patch_size)**2)
         
-        self.positional_embedding = nn.Embedding(self.n_patch + 1, self.hparams.d_model_emb)
-        self.patch_indexes = torch.arange(0, self.n_patch + 1).unsqueeze(0)
+        self.positional_embedding = nn.Embedding(n_patch + 1, self.hparams.d_model_emb)
+        patch_indexes = torch.arange(0, n_patch + 1).unsqueeze(0)
         
+        self.patch_indexes = nn.Parameter(patch_indexes, requires_grad=False)
+
         self.patch_embedding = nn.Linear(self.one_patch_dim, self.hparams.d_model_emb)
         self.dropout = nn.Dropout(hparams.dropout)
 
@@ -182,7 +175,7 @@ class Model_dl(nn.Module):
         self.mlp = PositionwiseFeedForward(self.hparams.d_model_emb, self.hparams.d_model_emb, self.hparams.dropout, self.hparams.num_classes)
 
     def forward(self, image):
-        x = rearrange(image, 'b c (i p) (i p) -> b (i i) (p p c)', p = self.hparams.patch_size)
+        x = rearrange(image, 'b c (h p) (w pd) -> b (h w) (p pd c)', p = self.hparams.patch_size, pd = self.hparams.patch_size)
         x = self.patch_embedding(x)
         x = self.dropout(x)
 
@@ -191,19 +184,10 @@ class Model_dl(nn.Module):
         zero_class_token = torch.repeat_interleave(self.zero_class_token, repeats = b, dim=0)
         x = torch.cat((zero_class_token, x), dim=1)
 
-        x += self.positional_embedding(self.patch_indexes)
+        pos = self.positional_embedding(self.patch_indexes)
+        x = x + pos
         x = self.encoder(x)
 
         x = self.mlp(x[:, 0])
 
         return x
-
-from hparams import hyperparams
-
-m = Model_dl(hyperparams)
-
-a = torch.zeros((2, 3, 256, 256))
-
-b = m(a)
-
-print(b.shape)

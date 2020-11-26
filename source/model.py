@@ -1,17 +1,56 @@
 from depen import *
-from modules import Model_Check
+from modules import Model_dl
 
 
-class Multi_Synth_pl(pl.LightningModule):
-    def __init__(self, hparams, steps_per_epoch):
+def _accuracy(output, target, topk=(1,)):
+    """
+    Compute the accuracy over the k top predictions
+
+    parameters -------------------------
+    - output        -   model output tensor
+    - target        -   actual label tensor
+    - topk          -   top k accuracy values to return
+
+    returns ----------------------------
+    - res           -   list of k top accuracies
+    """
+
+    num_classes = 1
+    for dim in output.shape[1:]:
+        num_classes *= dim
+
+    with torch.no_grad():
+        maxk = max(topk)
+        maxk = min(maxk, num_classes)
+        batch_size = target.size(0)
+
+        _, pred = output.topk(maxk, 1, True, True)
+        pred = pred.t()
+        correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+        res = []
+        for k in topk:
+            if k < num_classes:
+                correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
+                res.append(correct_k.mul_(100.0 / batch_size))
+            else:
+                res.append([0, 0])
+
+        return res
+
+
+class Age_Gender_pl(pl.LightningModule):
+    def __init__(self, conf, *args, **kwargs): #*args, **kwargs hparams, steps_per_epoch
         super().__init__()
-        self.hparams = hparams
-        self.network = Model_Check(self.hparams)
-        self.save_hyperparameters('steps_per_epoch')
-        self.loss = nn.MSELoss()
+        self.save_hyperparameters(conf)
+        self.save_hyperparameters()
+        print(self.hparams)
+        #self.hparams = hparams
+        self.network = Model_dl(self.hparams)
+        self.loss = nn.CrossEntropyLoss()
 
-    def forward(self, text_input, text_mask, audio_input, audio_mask):
-        return self.network(text_input, text_mask, audio_input, audio_mask)
+    def forward(self, image):
+        return self.network(image)
     
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
@@ -29,57 +68,34 @@ class Multi_Synth_pl(pl.LightningModule):
         else:
             return optimizer
     
-    
-    def batch_doing(self, batch):
-        sentences_tensor, sentences_mask, spectrograms, mel_mask, waveforms, waveform_l, client_ids, example_ids = batch
-        if self.hparams.mask_reverse:
-            sentences_mask = sentences_mask == False
-            mel_mask = mel_mask == False
-        
-        if self.hparams.separate_example:
-            repetition_per_example = int(len(spectrograms)/len(example_ids)) - 1
-            new_indecies = np.delete(np.arange(len(spectrograms)), example_ids)
 
-            spectrograms_examples = torch.repeat_interleave(spectrograms[example_ids], repeats = repetition_per_example, dim=0)
-            mel_mask_examples = torch.repeat_interleave(mel_mask[example_ids], repeats = repetition_per_example, dim=0)
+    def count_accuracy(self, y_got, labels):
+        acc = _accuracy(y_got, labels)
+        return acc[0]
 
-            sentences_tensor = sentences_tensor[new_indecies]
-            sentences_mask = sentences_mask[new_indecies]
-            spectrograms = spectrograms[new_indecies]
-        else:
-            mel_mask_examples = mel_mask
-            spectrograms_examples = torch.clone(spectrograms)
-        #mel_mask = spectrograms[new_indecies]
-
-        return sentences_tensor, sentences_mask, spectrograms_examples, mel_mask_examples, spectrograms
-
-    
     def training_step(self, batch, batch_idx):
-        sentences_tensor, sentences_mask, spectrograms_examples, mel_mask_examples, spectrograms = self.batch_doing(batch)
+        images, labels = batch['image'], batch['label']
 
-        x = self(sentences_tensor, sentences_mask, spectrograms_examples, mel_mask_examples)
-        x = x.unsqueeze(1).transpose(2,3).contiguous()
-        loss = self.loss(x, spectrograms)
-
+        y_got = self(images)
+        loss = self.loss(y_got, labels)
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        acc = self.count_accuracy(y_got, labels)
+        self.log('train_acc', acc, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
         return loss
     
     def training_epoch_end(self, outputs):
-    #    avg_loss = torch.stack(outputs).mean()
         self.log('epoch_now', self.current_epoch, logger=True)
-    #    return {'avg_train_loss': avg_loss}
-    #def training_step_end(self, outputs):
-    #    avg_loss = outputs.mean()
-    #    return {'avg_train_loss': avg_loss}
+
     
     def validation_step(self, batch, batch_idx):
-        sentences_tensor, sentences_mask, spectrograms_examples, mel_mask_examples, spectrograms = self.batch_doing(batch)
+        images, labels = batch['image'], batch['label']
 
-        x = self(sentences_tensor, sentences_mask, spectrograms_examples, mel_mask_examples)
-        x = x.unsqueeze(1).transpose(2,3).contiguous()
-        loss = self.loss(x, spectrograms)
+        y_got = self(images)
+        loss = self.loss(y_got, labels)
         self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        acc = self.count_accuracy(y_got, labels)
+        self.log('vall_acc', acc, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
     #def validation_epoch_end(self, outputs):
@@ -87,12 +103,13 @@ class Multi_Synth_pl(pl.LightningModule):
     #    return {'avg_val_loss': avg_loss}
 
     def test_step(self, batch, batch_idx):
-        sentences_tensor, sentences_mask, spectrograms_examples, mel_mask_examples, spectrograms = self.batch_doing(batch)
-        #([20, 1, 128, 1602])
-        x = self(sentences_tensor, sentences_mask, spectrograms_examples, mel_mask_examples)
-        x = x.unsqueeze(1).transpose(2,3).contiguous()
-        loss = self.loss(x, spectrograms)
+        images, labels = batch['image'], batch['label']
+
+        y_got = self(images)
+        loss = self.loss(y_got, labels)
         self.log('test_loss', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        acc = self.count_accuracy(y_got, labels)
+        self.log('test_acc', acc, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
     #def test_epoch_end(self, outputs):

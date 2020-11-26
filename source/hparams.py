@@ -1,16 +1,17 @@
 from argparse import Namespace
 
 re_dict = {
-    "path_to_file": "",
-    "batch_size": 2,
+    "path_to_files": "/content",
+    "batch_size": 64,
     "num_workers": 4, 
     #'pin_memory': True,
     "patch_size": 16,
     "im_size": 256, 
-    "grayscale": False,
-    "num_classes": 10,
-
-
+    "grayscale": True,
+    "category": "age", #gender - 2 classes, age - 8 class
+    "num_classes": 8, 
+    "fold_numbers": 2,
+    #
     "d_model_emb": 512,
     "d_ff":1024,
     "heads": 4,
