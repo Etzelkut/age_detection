@@ -1,2 +1,4 @@
-# age_detection
-Age and Gender classification using Transformer models.
+# Age Estimation based on the Visual Transformer
+Fun project to try Visual Transformer.
+
+Automated age and gender estimation becomes relevant in many applications. There are numerous ways to predict age and gender based on human voice, face features and posture. In this paper an image based approach will be studied. The method requires 2 dimensional images of people’s faces. The challenging problem with this method is that its performance reduces severely when experiments applied to the faces in the unconstrained environment. Another problem is aging differences based on personal lifestyle, genetics and environment. To put it simply different people age differently. Yet another challenge is the distinction between biological age and apparent age. The methods based on facial images are of 2 types. First one is hand-crafted feature extraction and classification, the second using deep neural networks. In our paper, we also proposed the vision transformer for age estimation. It was the first vision transformer proposed for facial tasks, and thus there were no pretrained models. However, we still managed to achieve some results in a low-data environment.  The future steps would be to pre-train the model on larger face datasets.
