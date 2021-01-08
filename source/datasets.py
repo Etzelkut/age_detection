@@ -41,19 +41,20 @@ def get_dataloader(path_to_data, image_size, types, category, fold_numbers, tran
     PATH_TO_FOLDS = "train_val_txt_files_per_fold"
     PATH_TO_IMAGE_FOLDERS = os.path.join(path_to_data, "aligned")
     applied_transforms = [
-        transforms.Resize(image_size),
-        transforms.CenterCrop(image_size),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.RandomCrop(227),
-        transforms.Grayscale(),
-        transforms.GaussianBlur(kernel_size=(65, 65)),
-        transforms.RandomRotation(20)
+        transforms.Resize(image_size), # 0
+        transforms.CenterCrop(image_size), # 1
+        transforms.RandomHorizontalFlip(), #2
+        transforms.ToTensor(), #3
+        transforms.RandomCrop(227), #4
+        transforms.Grayscale(), # 5
+        transforms.GaussianBlur(kernel_size=(3, 3)), # 6
+        transforms.RandomRotation(20), #7
+        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)), #8
     ]
 
     dictionary_of_transformations = {
         'train' : {
-            0 : list(applied_transforms[i] for i in [0, 1, 3]),  # no transformation
+            0 : list(applied_transforms[i] for i in [0, 1, 2, 7, 6, 3, 8]),  # transformation
             1 : list(applied_transforms[i] for i in [0, 1, 2, 3]),  # random horizontal flip
             2 : list(applied_transforms[i] for i in [0, 4, 2, 3]),  # random crop and random horizontal flip
             3 : list(applied_transforms[i] for i in [0, 1, 6, 3]),
@@ -61,11 +62,11 @@ def get_dataloader(path_to_data, image_size, types, category, fold_numbers, tran
             5: list(applied_transforms[i] for i in [0, 1, 2, 5, 3])
         },
         'val' : {
-            0 : list(applied_transforms[i] for i in [0, 1, 3]),
+            0 : list(applied_transforms[i] for i in [0, 1, 3, 8]),
             5:  list(applied_transforms[i] for i in [0, 1, 5, 3])
         },
         'test' : {
-            0 : list(applied_transforms[i] for i in [0, 1, 3]),
+            0 : list(applied_transforms[i] for i in [0, 1, 3, 8]),
             5:  list(applied_transforms[i] for i in [0, 1, 5, 3])
         }
     }
@@ -113,7 +114,7 @@ class Adience_pl_dataset(pl.LightningDataModule):
   def train_dataloader(self):
     train_loader = get_dataloader(path_to_data=self.path, image_size = self.hparams.im_size, types = "train",
                                   category = self.hparams.category, fold_numbers = [self.hparams.fold_numbers],
-                                  transform_index = 1, minibatch_size = self.hparams.batch_size, num_workers = self.hparams.num_workers,
+                                  transform_index = 0, minibatch_size = self.hparams.batch_size, num_workers = self.hparams.num_workers,
                                   Gray=self.hparams.grayscale)
     return train_loader
 

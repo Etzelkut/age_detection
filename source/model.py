@@ -44,7 +44,6 @@ class Age_Gender_pl(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters(conf)
         self.save_hyperparameters()
-        print(self.hparams)
         #self.hparams = hparams
         self.network = Model_dl(self.hparams)
         self.loss = nn.CrossEntropyLoss()

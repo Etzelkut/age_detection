@@ -6,7 +6,7 @@ from functools import partial
 from local_attention import LocalAttention
 
 #https://github.com/lucidrains/performer-pytorch/blob/main/performer_pytorch/performer_pytorch.py#L5
-
+#updated accordingly
 
 def exists(val):
     return val is not None

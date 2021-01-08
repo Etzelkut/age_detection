@@ -1,8 +1,7 @@
 from depen import *
 from performer import SelfAttention, FeedForward, default
 from attentions import AttentionLayer
-#some copied from harvard
-#some code from here https://github.com/lucidrains/vit-pytorch/blob/main/vit_pytorch/vit_pytorch.py
+#small number of code from here https://github.com/lucidrains/vit-pytorch/blob/main/vit_pytorch/vit_pytorch.py
 
 
 def swish(x):
@@ -161,19 +160,23 @@ class Model_dl(nn.Module):
         n_patch = (int(hparams.im_size/hparams.patch_size))**2
         self.one_patch_dim = int(channels * (hparams.patch_size)**2)
         
-        self.positional_embedding = nn.Embedding(n_patch + 1, self.hparams.d_model_emb)
-        patch_indexes = torch.arange(0, n_patch + 1).unsqueeze(0)
+        if self.hparams.older_count:
+            self.positional_embedding = nn.Embedding(n_patch + 1, self.hparams.d_model_emb)
+            patch_indexes = torch.arange(0, n_patch + 1).unsqueeze(0) 
+            self.patch_indexes = nn.Parameter(patch_indexes, requires_grad=False)
+        else:
+            self.positional_embedding = nn.Parameter(torch.randn(1, n_patch + 1, self.hparams.d_model_emb))
         
-        self.patch_indexes = nn.Parameter(patch_indexes, requires_grad=False)
-
         self.patch_embedding = nn.Linear(self.one_patch_dim, self.hparams.d_model_emb)
         self.dropout = nn.Dropout(hparams.dropout)
 
         self.zero_class_token = nn.Parameter(torch.randn(1, 1, self.hparams.d_model_emb))
         self.encoder = make_encoder(self.hparams)
 
+        self.feature_extcractor = nn.Identity()
         self.mlp = PositionwiseFeedForward(self.hparams.d_model_emb, self.hparams.d_model_emb, self.hparams.dropout, self.hparams.num_classes)
 
+        
     def forward(self, image):
         x = rearrange(image, 'b c (h p) (w pd) -> b (h w) (p pd c)', p = self.hparams.patch_size, pd = self.hparams.patch_size)
         x = self.patch_embedding(x)
@@ -184,10 +187,16 @@ class Model_dl(nn.Module):
         zero_class_token = torch.repeat_interleave(self.zero_class_token, repeats = b, dim=0)
         x = torch.cat((zero_class_token, x), dim=1)
 
-        pos = self.positional_embedding(self.patch_indexes)
-        x = x + pos
+        if self.hparams.older_count:
+            pos = self.positional_embedding(self.patch_indexes.long())
+            x = x + pos
+        else:
+            x = x + self.positional_embedding
+
         x = self.encoder(x)
 
-        x = self.mlp(x[:, 0])
+        x = self.feature_extcractor(x[:, 0])
+
+        x = self.mlp(x)
 
         return x
